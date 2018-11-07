@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import codecs
 import os
@@ -10,11 +11,39 @@ from urllib import urlretrieve
 from urlparse import urljoin, urlparse
 from xml.etree.ElementTree import ElementTree, XMLTreeBuilder
 from urlparse import urlparse #AW!!
-
+import urllib 
 import yaml
 from bs4 import BeautifulSoup
 
 from html2text import html2text_file
+import re
+
+
+def remove_period(x):
+#cut words and delete punctuation
+
+ 	punc = "！？｡＂＃＄％＆＇（）＊＋，－／：；＜＝＞＠［＼］＾＿｀｛｜｝～｟｠｢｣､、〃》「」『』【】〔〕〖〗〘〙〚〛〜〝〞〟〰〾〿–—‘’‛“”„‟…‧﹏."
+	punc = punc.decode("utf-8")
+	string = re.sub(ur"[%s]+" %punc, "", x.decode("utf-8"))
+
+	return string
+	
+def remove_shortcode(x):
+#remove shortcode of wordpress post
+
+    # remove [somecode =]
+    x = re.sub(r'\[[^\]?^\=]*?\=[^\]]*?\]', '', x)
+
+    # remove [/somecode]
+    x = re.sub(r'\[/[^\]]*?\]', '', x)
+
+    # remove [et something]
+    x = re.sub(r'\[et[^\]]*?\]', '', x)
+
+    #x = re.sub(r'\n', '<br>', x)
+    x= '<br />'.join(x.splitlines())
+    return x
+
 
 '''
 exitwp - Wordpress xml exports to Jekykll blog format conversion
@@ -115,6 +144,10 @@ def parse_wp_xml(file):
                         export_taxanomies[t_domain] = []
                     export_taxanomies[t_domain].append(t_entry)
 
+            
+
+            thumb_id = i.find('.//{http://wordpress.org/export/1.2/}postmeta[wp:meta_key = "_thumbnail_id"]/{http://wordpress.org/export/1.2/}meta_value')
+            print 'thumb id = '+thumb_id
             def gi(q, unicode_wrap=True, empty=False):
                 namespace = ''
                 tag = ''
@@ -131,6 +164,7 @@ def parse_wp_xml(file):
                         result = ''
                 if unicode_wrap:
                     result = unicode(result)
+		
                 return result
 
             body = gi('content:encoded')
@@ -153,7 +187,8 @@ def parse_wp_xml(file):
 
             export_item = {
                 'title': gi('title'),
-                'link': gi('link'),
+                #'link': urllib.unquote(gi('link')),
+		        'link': gi('link'),
                 'author': gi('dc:creator'),
                 'date': gi('wp:post_date_gmt'),
                 'slug': gi('wp:post_name'),
@@ -163,7 +198,7 @@ def parse_wp_xml(file):
                 'parent': gi('wp:post_parent'),
                 'comments': gi('wp:comment_status') == u'open',
                 'taxanomies': export_taxanomies,
-                'body': body,
+                'body': remove_shortcode(body),
                 'excerpt': excerpt,
                 'img_srcs': img_srcs
             }
@@ -291,9 +326,11 @@ def write_jekyll(data, target_format):
         out = None
 		
         item_url = urlparse(i['link'])        # AW!!: Store item url for later url path relative
+        #item_url = urllib.unquote(i['link'])
         yaml_header = {
             'title': i['title'],
-            'url': item_url.path,             # AW!!: Renamed: link (Jekykll) -> url and and make url path relative
+            'url': remove_period(urllib.unquote(str(item_url.path))),             # AW!!: Renamed: link (Jekykll) -> url and and make url path relative
+            
             'author': i['author'],
             'date': datetime.strptime(
                 i['date'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC())
